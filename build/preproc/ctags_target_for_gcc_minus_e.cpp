@@ -1,89 +1,84 @@
 # 1 "/Users/kimdonghyun/developer/arduino/drone/execution/app.ino"
-//-----------------------------------------------------
-//-----------------------------------------------------
-
-# 5 "/Users/kimdonghyun/developer/arduino/drone/execution/app.ino" 2
+# 2 "/Users/kimdonghyun/developer/arduino/drone/execution/app.ino" 2
 
 SoftwareSerial bleSerial(A0, A1); // RX, TX
 
-//-----------------------------------------------------
-
-//==== 드론 2호 제어에 필요한 변수 선언 부분 시작 ====
+//==== 변수 선언 부분 ====//
 unsigned char startBit_1 = 0x26;
 unsigned char startBit_2 = 0xa8;
 unsigned char startBit_3 = 0x14;
 unsigned char startBit_4 = 0xb1;
-unsigned char len = 0x14;
-unsigned char checkSum = 0;
+unsigned char len = 0x14; // 전체 패킷의 길이
+unsigned char checkSum = 0; // roll pitch yaw throttle option posvel yawvel 합
 //
-int roll = 0;
-int pitch = 0;
-int yaw = 0;
-int throttle = 0;
-int option = 0x000f;
+int roll = 0; // 좌우
+int pitch = 0; // 앞뒤
+int yaw = 0; // 제자리 회전
+int throttle = 0; // 높이 제어 -> range : 0 ~ 150
+int option = 0x000f; // 비행 옵션 0x000F
 //
-int p_vel = 0x0064;
+int p_vel = 0x0064; // 이동 속도 설정
 int y_vel = 0x0064;
 
-unsigned char drone_action = 0;
-unsigned char payload[14];
-unsigned int firstRoll;
-unsigned int firstPitch;
-//===== 드론 2호 제어에 필요한 변수 선언 부분 끝 =====
+unsigned char drone_action = 0; // default 0 은 블루투스 리모컨
+unsigned char payload[14]; // roll pitch yaw .... 값들을 payload array에 담는다.
+unsigned int firstRoll; // 좌우 이동 값을 저장하기 위해
+unsigned int firstPitch; // 전 후진 이동의 값을 저장하기 위해
+//===== 변수 선언 부분 끝 =====
 
 //-----------------------------------------------------
 
-//=========== 드론 2호 높이 제어 부분 시작 ===========
+//=========== 높이 제어 부분 시작 ===========
 void checkThrottle()
 {
 
-  // throttle 값 감소 : 드론 2호 하강 제어 부분
-  if (!digitalRead(6))
+  // throttle 값 감소 : 하강 제어 부분
+  if (!digitalRead(6)) // 6 pin == LOW 일 때
   {
     if (throttle > 9)
       throttle -= 10;
   }
 
-  // throttle 값 증가 : 드론 2호 상승 제어 부분
-  else if (!digitalRead(5))
+  // throttle 값 증가 : 상승 제어 부분
+  else if (!digitalRead(5)) // 5 pin == LOW 일 때
   {
     if (throttle < 141)
       throttle += 10;
   }
 }
-//============ 드론 2호 높이 제어 부분 끝 ============
+//============ 높이 제어 부분 끝 ============
 
 //-----------------------------------------------------
 
-//=== 드론 2호 좌회전/우회전(제자리) 제어 부분 시작 ===
+//=== 좌회전/우회전(제자리) 제어 부분 시작 ===
 void checkYaw()
 {
-  if (throttle == 0)
+  if (throttle == 0) // 높이가 0 일때 Yaw를 0으로 맞춰준다.
     yaw = 0;
 
-  // yaw 값 감소 : 드론 2호 좌회전(제자리) 제어 부분
-  if (!digitalRead(7))
+  // yaw 값 감소 : 좌회전(제자리) 제어 부분
+  if (!digitalRead(7)) // 7 pin == LOW
   {
     if (yaw > -170)
       yaw -= 10;
   }
 
-  // yaw 값 증가 : 드론 2호 우회전(제자리) 제어 부분
-  else if (!digitalRead(8))
+  // yaw 값 증가 : 우회전(제자리) 제어 부분
+  else if (!digitalRead(8)) // 8 pin == LOW
   {
     if (yaw < 170)
       yaw += 10;
   }
 }
-//==== 드론 2호 좌회전/우회전(제자리) 제어 부분 끝 ====
+//==== 좌회전/우회전(제자리) 제어 부분 끝 ====
 
 //-----------------------------------------------------
 
-//========= 드론 2호 비상 착륙 제어 부분 시작 =========
+//========= 비상 착륙 제어 부분 시작 =========
 void checkEmergency()
 {
   //비상버튼 눌리는지 체크하는 부분
-  if (!digitalRead(9))
+  if (!digitalRead(9)) // 9 pin == LOW
   {
     roll = 0;
     pitch = 0;
@@ -97,17 +92,17 @@ void checkEmergency()
     option = 0x000f;
   }
 }
-//========== 드론 2호 비상 착륙 제어 부분 끝 ==========
+//========== 비상 착륙 제어 부분 끝 ==========
 
 //-----------------------------------------------------
 
-//====== 드론 2호 좌측/우측 이동 제어 부분 시작 ======
+//====== 좌측/우측 이동 제어 부분 시작 ======
 void checkRoll()
 {
   // roll 값 증가 : 오른쪽 이동, roll 값 감소 : 왼쪽 이동
-  unsigned int secondRoll = analogRead(4);
-
-  if (secondRoll < firstRoll - 450)
+  unsigned int secondRoll = analogRead(4); // 4 pin analog로 joystick 좌우
+  // firstRoll 은 9 pin == LOW 로 켰을 때 처음 불러오는 roll의 값이다.
+  if (secondRoll < firstRoll - 450) // loop(startDronControll)에서 지속적으로 analog를 받아온다.
     roll = -200;
   else if (secondRoll < firstRoll - 350)
     roll = -160;
@@ -130,11 +125,11 @@ void checkRoll()
   else
     roll = 200;
 }
-//======= 드론 2호 좌측/우측 이동 제어 부분 끝 =======
+//======= 좌측/우측 이동 제어 부분 끝 =======
 
 //-----------------------------------------------------
 
-//====== 드론 2호 전진/후진 이동 제어 부분 시작 ======
+//====== 전진/후진 이동 제어 부분 시작 ======
 void checkPitch()
 {
   // pitch 값 증가 : 앞으로 이동, pitch 값 감소 : 뒤로 이동
@@ -163,11 +158,11 @@ void checkPitch()
   else
     pitch = 200;
 }
-//======= 드론 2호 전진/후진 이동 제어 부분 끝 =======
+//======= 전진/후진 이동 제어 부분 끝 =======
 
 //-----------------------------------------------------
 
-//========= 드론 2호 제어 명령 구조 부분 시작 =========
+//========= 제어 명령 구조 부분 시작 =========
 void sendDroneCommand()
 {
   bleSerial.print("at+writeh000d");
@@ -248,7 +243,7 @@ void sendDroneCommand()
   bleSerial.print("\r");
   delay(50);
 }
-//========== 드론 2호 제어 명령 구조 부분 끝 ==========
+//========== 제어 명령 구조 부분 끝 ==========
 
 //-----------------------------------------------------
 
@@ -282,18 +277,18 @@ void checkCRC()
 
 //-----------------------------------------------------
 
-//==== 드론 2호 제어 명령 데이터 첫 진행 부분 시작 ====
+//==== 제어 명령 데이터 첫 진행 부분 시작 ====
 unsigned char startDroneControl()
 {
-  if (!digitalRead(9))
+  if (!digitalRead(9)) // 9 pin == LOW
   {
-    firstRoll = analogRead(4);
-    firstPitch = analogRead(5);
+    firstRoll = analogRead(4); // 시작될 때 roll을 읽는다.
+    firstPitch = analogRead(5); // 시작될 때 pitch를 읽는다.
     drone_action = 1;
   }
   return drone_action;
 }
-//===== 드론 2호 제어 명령 데이터 첫 진행 부분 끝 =====
+//===== 제어 명령 데이터 첫 진행 부분 끝 =====
 
 //-----------------------------------------------------
 
